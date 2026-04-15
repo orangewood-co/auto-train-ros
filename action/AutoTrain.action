@@ -10,10 +10,9 @@ int32 epochs
 float32 map_threshold
 bool inference
 float32 inference_threshold
-int32 camera_range
 string object_name
 string object_label
-int32 camera_index
+string image_topic_name
 ---
 # Result
 string new_weights_path

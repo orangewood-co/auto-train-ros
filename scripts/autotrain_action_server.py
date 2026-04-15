@@ -36,6 +36,8 @@ class AutoTrainActionServer(Node):
 
         try:
             at = AutoTrain(
+                node_instance=self,
+                image_topic_name=req.image_topic_name,
                 data_folder=req.data_folder,
                 prev_data_folder=req.prev_data_folder,
                 new_weights=req.new_weights,
@@ -47,7 +49,6 @@ class AutoTrainActionServer(Node):
                 map_threshold=req.map_threshold,
                 inference=req.inference,
                 inference_threshold=req.inference_threshold,
-                camera_range=req.camera_range,
             )
         except ValueError as e:
             self.get_logger().error(f"Invalid parameters: {e}")
@@ -69,21 +70,17 @@ class AutoTrainActionServer(Node):
             if not os.path.exists(at.json_file):
                 with open(at.json_file, "w") as f:
                     json.dump({"candidate_labels": []}, f, indent=4)
+            self._publish_feedback(
+                goal_handle,
+                f"Subscribing to image topic '{req.image_topic_name}'",
+            )
 
-            # 3. Write camera index directly (replaces interactive select_camera)
-            with open(at.json_file, "r") as f:
-                data = json.load(f)
-            data["camera_index"] = req.camera_index
-            with open(at.json_file, "w") as f:
-                json.dump(data, f, indent=4)
-            self._publish_feedback(goal_handle, f"Camera index set to {req.camera_index}")
-
-            # 4. Load previous data if continuing from existing weights
+            # 3. Load previous data if continuing from existing weights
             if not req.new_weights:
                 at.prev_data()
                 self._publish_feedback(goal_handle, "Previous data loaded")
 
-            # 5. Append the generic object name to candidate_labels
+            # 4. Append the generic object name to candidate_labels
             object_name = req.object_name.rstrip(".") + "."
             with open(at.json_file, "r") as f:
                 data = json.load(f)
@@ -95,7 +92,7 @@ class AutoTrainActionServer(Node):
                 f"Object name '{req.object_name}' registered, starting data collection",
             )
 
-            # 6. Collect new data, augment, and train
+            # 5. Collect new data, augment, and train
             new_weights_path = at.new_data(
                 object_name=object_name, object_specific=req.object_label
             )

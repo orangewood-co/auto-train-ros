@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import json
 import rclpy
 from rclpy.action import ActionClient
 from rclpy.node import Node
@@ -8,16 +9,17 @@ from auto_train_ros.action import AutoTrain as AutoTrainAction
 
 
 class AutoTrainActionClient(Node):
-    def __init__(self):
+    def __init__(self, vision_config_path=""):
         super().__init__("auto_train_action_client")
         self._action_client = ActionClient(self, AutoTrainAction, "auto_train")
+        self._vision_config_path = vision_config_path
 
     def send_goal(
         self,
         data_folder,
         object_name,
         object_label,
-        camera_index=0,
+        image_topic_name,
         prev_data_folder="",
         new_weights=True,
         abs_yaml_file="",
@@ -28,7 +30,6 @@ class AutoTrainActionClient(Node):
         map_threshold=0.5,
         inference=False,
         inference_threshold=0.4,
-        camera_range=10,
     ):
         self.get_logger().info("Waiting for AutoTrain Action Server...")
         self._action_client.wait_for_server()
@@ -46,10 +47,9 @@ class AutoTrainActionClient(Node):
         goal.map_threshold = map_threshold
         goal.inference = inference
         goal.inference_threshold = inference_threshold
-        goal.camera_range = camera_range
         goal.object_name = object_name
         goal.object_label = object_label
-        goal.camera_index = camera_index
+        goal.image_topic_name = image_topic_name
 
         self._send_goal_future = self._action_client.send_goal_async(
             goal, feedback_callback=self._feedback_callback
@@ -69,29 +69,55 @@ class AutoTrainActionClient(Node):
         result = future.result().result
         if result.success:
             self.get_logger().info(f"Training succeeded! New weights: {result.new_weights_path}")
+            self._update_vision_config(result.new_weights_path)
         else:
             self.get_logger().error("Training failed or mAP threshold not met.")
         rclpy.shutdown()
+
+    def _update_vision_config(self, weights_path):
+        if not self._vision_config_path:
+            self.get_logger().warn("No vision_config_path provided, skipping config update.")
+            return
+        try:
+            with open(self._vision_config_path, "r") as f:
+                config = json.load(f)
+            config["new_weights"] = weights_path
+            with open(self._vision_config_path, "w") as f:
+                json.dump(config, f, indent=4)
+            self.get_logger().info(f"Updated vision config '{self._vision_config_path}' with new weights.")
+        except Exception as e:
+            self.get_logger().error(f"Failed to update vision config: {e}")
 
     def _feedback_callback(self, feedback_msg):
         self.get_logger().info(f"Feedback: {feedback_msg.feedback.status_message}")
 
 
 def main(args=None):
-    rclpy.init(args=args)
+    import argparse
 
-    client = AutoTrainActionClient()
+    parser = argparse.ArgumentParser(description="AutoTrain Action Client")
+    parser.add_argument(
+        "--vision-config-path",
+        type=str,
+        required=True,
+        help="Absolute path to the vision_config.json file",
+    )
+    parsed, remaining = parser.parse_known_args()
+
+    rclpy.init(args=remaining)
+
+    client = AutoTrainActionClient(vision_config_path=parsed.vision_config_path)
 
     # --- Example goal: adjust these to your use-case ---
     client.send_goal(
         data_folder="/home/owl/auto_train_data",
-        object_name="person",
-        object_label="puck",
-        camera_index=0,
+        object_name="rectangular yellow object",
+        object_label="duster",
+        image_topic_name="/camera/color/image_raw",
         new_weights=True,
-        image_threshold=10,
+        image_threshold=100,
         number_aug=3,
-        epochs=2,
+        epochs=20,
         map_threshold=0.0,
     )
 

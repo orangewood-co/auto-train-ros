@@ -8,7 +8,6 @@ from datetime import datetime
 from .roboflow_bb import RoboflowBB
 from .new_data import NewData
 from .utils_aug import Augment
-from .available_cam import AvailableCam
 
 
 class AutoTrain:
@@ -16,6 +15,8 @@ class AutoTrain:
     Trains object detection model(YOLOv8) using real time inference data. It is for automating the supervised learning, specifically cutting out the manual labelling task and training the model for it to remember the object as per the label we want.
 
     Args:
+        - node_instance: ROS 2 Node used for creating topic subscriptions
+        - image_topic_name (str): ROS topic publishing sensor_msgs/Image frames
         - data_folder (str): Path to local folder to store the new data
         - prev_data_folder (str): Path to local previous folder containing images and labels folder
         - new_weights (boolean): True if to not use any previous data
@@ -27,9 +28,8 @@ class AutoTrain:
         - map_threshold (float): value<=1 ; Threshold to compare mAP50 score
         - inference (boolean): True to perform the inference on live feed
         - inference_threshold (float): value<=1 ; Threshold for inference confidence score
-        - camera_range (int): Range of camera indexes to look for
     '''
-    def __init__(self, data_folder, prev_data_folder="", new_weights=True, abs_yaml_file=None, draw_bb=False, image_threshold=100, number_aug=3, epochs=69, map_threshold=0.5, inference=False, inference_threshold=0.4, camera_range=10) -> None:
+    def __init__(self, node_instance, image_topic_name, data_folder, prev_data_folder="", new_weights=True, abs_yaml_file=None, draw_bb=False, image_threshold=100, number_aug=3, epochs=69, map_threshold=0.5, inference=False, inference_threshold=0.4) -> None:
 
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.propagate = False
@@ -50,6 +50,9 @@ class AutoTrain:
         file_handler.setFormatter(formatter)
         self.logger.addHandler(file_handler)
 
+        self.node = node_instance
+        self.image_topic = image_topic_name
+
         self.timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
 
         self.data_folder = data_folder
@@ -68,7 +71,6 @@ class AutoTrain:
         self.map_threshold = map_threshold
         self.inference = inference
         self.inference_threshold = inference_threshold
-        self.camera_range = camera_range
 
     def prev_data(self):
         '''
@@ -109,7 +111,7 @@ class AutoTrain:
         Returns:
             - new_weights_path (str): Path to the new '.pt' weights file
         '''
-        zsl = NewData(logger=self.logger, combined_folder=self.combined_folder, json_file=self.json_file, object_name=object_name, image_threshold=self.image_threshold, epochs=self.epochs, map_threshold=self.map_threshold, inference=self.inference, inference_threshold=self.inference_threshold)
+        zsl = NewData(logger=self.logger, node=self.node, image_topic=self.image_topic, combined_folder=self.combined_folder, json_file=self.json_file, object_name=object_name, image_threshold=self.image_threshold, epochs=self.epochs, map_threshold=self.map_threshold, inference=self.inference, inference_threshold=self.inference_threshold)
         # Capture, split and store dataset; create yaml file
         zsl.capture_pred(box_threshold=0.6, text_threshold=0.4)
         self.logger.info("Done capturing frames \n")
@@ -151,9 +153,6 @@ class AutoTrain:
                         "candidate_labels": []
                     }
                     json.dump(json_data, f, indent=4)
-            #get camera index
-            cam = AvailableCam(logger=self.logger, json_file=self.json_file, camera_range=self.camera_range)
-            cam.select_camera()
 
             # get previous data
             if not self.new_weights:
