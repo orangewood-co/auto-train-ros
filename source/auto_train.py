@@ -50,7 +50,6 @@ class AutoTrain:
         file_handler.setFormatter(formatter)
         self.logger.addHandler(file_handler)
 
-
         self.timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
 
         self.data_folder = data_folder
@@ -114,6 +113,11 @@ class AutoTrain:
         # Capture, split and store dataset; create yaml file
         zsl.capture_pred(box_threshold=0.6, text_threshold=0.4)
         self.logger.info("Done capturing frames \n")
+        raw_img_dir = os.path.join(self.combined_folder, "raw_dataset", "images")
+        captured = [f for f in os.listdir(raw_img_dir) if os.path.isfile(os.path.join(raw_img_dir, f))] if os.path.isdir(raw_img_dir) else []
+        if not captured:
+            self.logger.error("No images were captured — cannot proceed with training.")
+            return None
         # update the json file with new class
         with open(self.json_file, 'r') as file:
             data = json.load(file)

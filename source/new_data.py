@@ -61,9 +61,9 @@ class NewData:
         torch.cuda.empty_cache()
 
         with torch.no_grad():
-            with torch.cuda.amp.autocast():
+            with torch.amp.autocast("cuda"):
                 outputs = self.model(**inputs)
-        results = self.processor.post_process_grounded_object_detection(outputs, inputs.input_ids, box_threshold=box_threshold, text_threshold=text_threshold, target_sizes=[image.size[::-1]])
+        results = self.processor.post_process_grounded_object_detection(outputs, inputs.input_ids, threshold=box_threshold, text_threshold=text_threshold, target_sizes=[image.size[::-1]])
         result = results[0]
 
         if len(result['labels']) != 0:  # Check if labels list is not empty
@@ -83,16 +83,21 @@ class NewData:
         with open(self.json_file, 'r') as file:
                 data = json.load(file)
         cam_index = data['camera_index']
+        has_gui = os.environ.get("DISPLAY") is not None
         vid = cv2.VideoCapture(cam_index)
         try:
             img_counter=0
             while True:
                 ret, frame = vid.read()
-                cv2.imshow('Image Capture', frame)
-                key = cv2.waitKey(1) & 0xFF
-                if key == ord('q') or img_counter == self.image_threshold:
-                    break
+                if has_gui:
+                    cv2.imshow('Image Capture', frame)
+                    key = cv2.waitKey(1) & 0xFF
+                    if key == ord('q'):
+                        break
                 
+                if img_counter == self.image_threshold:
+                    break
+
                 frame_bgr = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 results, xmin, ymin, xmax, ymax = self.owl_pred_live(frame_bgr, box_threshold, text_threshold)
                 # Store only if object is detected in frame
@@ -106,7 +111,8 @@ class NewData:
                     img_path = os.path.join(img_folder, img_name)
                     ih, iw = frame.shape[:2]
                     image_sh = cv2.rectangle(frame, (int(xmin),int(ymin)), (int(xmax),int(ymax)), (0,255,0), 2)
-                    cv2.imshow("Detected OWL", image_sh)
+                    if has_gui:
+                        cv2.imshow("Detected OWL", image_sh)
                     cv2.imwrite(img_path, image_sh)
                     self.logger.info(f"{img_name} written!")
                     img_counter += 1
@@ -122,13 +128,11 @@ class NewData:
                         h = ymax - ymin
                         data = f"{label_number} {xc/iw} {yc/ih} {w/iw} {h/ih}"
                         file.write(data)
-            
-                if img_counter == self.image_threshold:
-                    break
                     
         finally:
             vid.release()
-            cv2.destroyAllWindows()
+            if has_gui:
+                cv2.destroyAllWindows()
 
     def split_and_yaml(self):
         '''
@@ -175,6 +179,7 @@ class NewData:
             new_weights_path = None
             self.logger.error('Try with more images and training more epochs')
         # Start live inference
+        has_gui = os.environ.get("DISPLAY") is not None
         if self.inference and new_weights_path!=None:
             with open(self.json_file, 'r') as file:
                 data = json.load(file)
@@ -184,28 +189,25 @@ class NewData:
             new_yolov8 = YOLO(new_weights_path).to(self.device)
             while True:
                 _, frame = vid.read()
-                cv2.imshow('Image Capture', frame)
+                if has_gui:
+                    cv2.imshow('Image Capture', frame)
                 results = new_yolov8(frame, conf=self.inference_threshold, device=self.device, stream=True)                
 
                 for r in results:
                     boxes = r.boxes
                     for box in boxes:
-                        # bounding box
                         x1, y1, x2, y2 = box.xyxy[0]
-                        x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2) # convert to int values
-                        # put box in cam
+                        x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
                         cv2.rectangle(frame, (x1, y1), (x2, y2), (0,255,0), 2)
-                        # confidence
                         confidence = round(float(box.conf[0]) * 100, 2)
-                        # class name
                         cls = int(box.cls[0])
                         label = f"{data['candidate_labels'][cls]}: {confidence}%"
                         cv2.putText(frame, label, [x1, y1], cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,0), 2)
 
-                cv2.imshow('Inference', frame)
-
-                key = cv2.waitKey(1) & 0xFF
-                if key == 27: #ESC Key to exit
-                    break
+                if has_gui:
+                    cv2.imshow('Inference', frame)
+                    key = cv2.waitKey(1) & 0xFF
+                    if key == 27:
+                        break
 
         return new_weights_path, map50

@@ -118,18 +118,20 @@ class Augment():
         Returns:
             - tuple: A tuple containing the augmented image and the transformed bounding boxes.
         '''
-        # Define the augmentations
+        bbox_coords = [b[:4] for b in bboxes]
+        class_labels = [b[4] for b in bboxes]
+
         transform = A.Compose([
             A.HorizontalFlip(p=0.3),
             A.VerticalFlip(p=0.5),
             A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0),
             A.Affine(scale=0.4, p=0.6),
             A.Blur(blur_limit=(3, 7), p=0.5),
-        ], bbox_params=A.BboxParams(format='yolo', clip=True))
+        ], bbox_params=A.BboxParams(format='yolo', clip=True, label_fields=['class_labels']))
 
-        # Apply the augmentations
-        transformed = transform(image=image, bboxes=bboxes)
-        transformed_image, transformed_bboxes = transformed['image'], transformed['bboxes']
+        transformed = transform(image=image, bboxes=bbox_coords, class_labels=class_labels)
+        transformed_image = transformed['image']
+        transformed_bboxes = [list(b) + [l] for b, l in zip(transformed['bboxes'], transformed['class_labels'])]
         return transformed_image, transformed_bboxes
 
     def make_copy_folder(self, new_combined_folder):

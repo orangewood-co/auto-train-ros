@@ -1,0 +1,23 @@
+# Goal
+string data_folder
+string prev_data_folder
+bool new_weights
+string abs_yaml_file
+bool draw_bb
+int32 image_threshold
+int32 number_aug
+int32 epochs
+float32 map_threshold
+bool inference
+float32 inference_threshold
+int32 camera_range
+string object_name
+string object_label
+int32 camera_index
+---
+# Result
+string new_weights_path
+bool success
+---
+# Feedback
+string status_message
