@@ -1,17 +1,17 @@
 import json
+import logging
 import os
 import shutil
-import logging
-from logging.handlers import RotatingFileHandler
 from datetime import datetime
+from logging.handlers import RotatingFileHandler
 
-from .roboflow_bb import RoboflowBB
 from .new_data import NewData
+from .roboflow_bb import RoboflowBB
 from .utils_aug import Augment
 
 
 class AutoTrain:
-    '''
+    """
     Trains object detection model(YOLOv8) using real time inference data. It is for automating the supervised learning, specifically cutting out the manual labelling task and training the model for it to remember the object as per the label we want.
 
     Args:
@@ -28,8 +28,24 @@ class AutoTrain:
         - map_threshold (float): value<=1 ; Threshold to compare mAP50 score
         - inference (boolean): True to perform the inference on live feed
         - inference_threshold (float): value<=1 ; Threshold for inference confidence score
-    '''
-    def __init__(self, node_instance, image_topic_name, data_folder, prev_data_folder="", new_weights=True, abs_yaml_file=None, draw_bb=False, image_threshold=100, number_aug=3, epochs=69, map_threshold=0.5, inference=False, inference_threshold=0.4) -> None:
+    """
+
+    def __init__(
+        self,
+        node_instance,
+        image_topic_name,
+        data_folder,
+        prev_data_folder="",
+        new_weights=True,
+        abs_yaml_file=None,
+        draw_bb=False,
+        image_threshold=100,
+        number_aug=3,
+        epochs=69,
+        map_threshold=0.5,
+        inference=False,
+        inference_threshold=0.4,
+    ) -> None:
 
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.propagate = False
@@ -38,14 +54,14 @@ class AutoTrain:
             self.logger.handlers.clear()
 
         # Define a StreamHandler to log messages to the console
-        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+        formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
         handler = logging.StreamHandler()
-        
+
         handler.setFormatter(formatter)
         self.logger.addHandler(handler)
         self.logger.setLevel(logging.INFO)
 
-        file_handler = RotatingFileHandler('logger.log', mode='a', maxBytes=10 * 1024 * 1024, backupCount=3)  # 10 MB max size, 3 backups
+        file_handler = RotatingFileHandler("logger.log", mode="a", maxBytes=10 * 1024 * 1024, backupCount=3)  # 10 MB max size, 3 backups
         file_handler.setLevel(logging.INFO)
         file_handler.setFormatter(formatter)
         self.logger.addHandler(file_handler)
@@ -62,9 +78,9 @@ class AutoTrain:
         self.json_file = f"{self.combined_folder}/inputs.json"
         self.draw_bb = draw_bb
         self.abs_yaml_file = abs_yaml_file
-        if not self.new_weights and self.abs_yaml_file==None:
-            self.logger.error(f"Input abs_yaml_file if new_weights is False")
-            raise ValueError(f"Input abs_yaml_file if new_weights is False")
+        if not self.new_weights and self.abs_yaml_file is None:
+            self.logger.error("Input abs_yaml_file if new_weights is False")
+            raise ValueError("Input abs_yaml_file if new_weights is False")
         self.image_threshold = image_threshold
         self.number_aug = number_aug
         self.epochs = epochs
@@ -73,9 +89,9 @@ class AutoTrain:
         self.inference_threshold = inference_threshold
 
     def prev_data(self):
-        '''
+        """
         Function returns and stores previous data in YOLOv8 format in raw_dataset.
-        '''
+        """
         rfbb = RoboflowBB(logger=self.logger, prev_folder=self.prev_data_folder, combined_folder=self.combined_folder, json_file=self.json_file, abs_yaml_file=self.abs_yaml_file)
         if self.draw_bb:
             # copies and draws bb in a combined dataset; updates json file as per the yaml file
@@ -86,13 +102,13 @@ class AutoTrain:
             self.logger.info("Stored combined data \n")
             rfbb.update_json_from_yaml()
             self.logger.info("We have updated json file now \n")
-    
+
     def augment(self):
-        '''
+        """
         Function augments the images and labels to store the combined dataset for training in aug_dataset.
-        '''
+        """
         aug = Augment(logger=self.logger, combined_folder=self.combined_folder, json_file=self.json_file)
-        imgs = [img for img in os.listdir(self.combined_folder+"/raw_dataset/images") if aug.is_image_by_extension(img)]
+        imgs = [img for img in os.listdir(self.combined_folder + "/raw_dataset/images") if aug.is_image_by_extension(img)]
 
         for img_file in imgs:
             image, gt_bboxes, aug_file_name = aug.get_inp_data(img_file)
@@ -102,7 +118,7 @@ class AutoTrain:
         self.logger.info("Augmented and saved dataset")
 
     def new_data(self, object_name, object_specific):
-        '''
+        """
         Generates new data for the input object, splits it and creates a YAML file for training
         Trains data to generate new weights file
 
@@ -110,8 +126,20 @@ class AutoTrain:
             - object (str): Object to be detected
         Returns:
             - new_weights_path (str): Path to the new '.pt' weights file
-        '''
-        zsl = NewData(logger=self.logger, node=self.node, image_topic=self.image_topic, combined_folder=self.combined_folder, json_file=self.json_file, object_name=object_name, image_threshold=self.image_threshold, epochs=self.epochs, map_threshold=self.map_threshold, inference=self.inference, inference_threshold=self.inference_threshold)
+        """
+        zsl = NewData(
+            logger=self.logger,
+            node=self.node,
+            image_topic=self.image_topic,
+            combined_folder=self.combined_folder,
+            json_file=self.json_file,
+            object_name=object_name,
+            image_threshold=self.image_threshold,
+            epochs=self.epochs,
+            map_threshold=self.map_threshold,
+            inference=self.inference,
+            inference_threshold=self.inference_threshold,
+        )
         # Capture, split and store dataset; create yaml file
         zsl.capture_pred(box_threshold=0.6, text_threshold=0.4)
         self.logger.info("Done capturing frames \n")
@@ -121,11 +149,11 @@ class AutoTrain:
             self.logger.error("No images were captured — cannot proceed with training.")
             return None
         # update the json file with new class
-        with open(self.json_file, 'r') as file:
+        with open(self.json_file, "r") as file:
             data = json.load(file)
-        data['candidate_labels'].pop()
-        data['candidate_labels'].append(object_specific)
-        with open(self.json_file, 'w') as file:
+        data["candidate_labels"].pop()
+        data["candidate_labels"].append(object_specific)
+        with open(self.json_file, "w") as file:
             json.dump(data, file, indent=4)
         # Augment dataset
         self.augment()
@@ -134,24 +162,22 @@ class AutoTrain:
         # Train on new yaml file and get the MaP50 scores
         new_weights_path, _ = zsl.train()
         return new_weights_path
-    
+
     def run(self):
-        '''
+        """
         Complete process to get available cameras, and use that to run autotrain and get new weights file.
-        '''
+        """
         try:
             # check if raw_dataset folder exists or not
             if not os.path.exists(self.combined_folder):
-                os.makedirs(self.combined_folder+"/raw_dataset/images")
-                os.makedirs(self.combined_folder+"/raw_dataset/labels")
+                os.makedirs(self.combined_folder + "/raw_dataset/images")
+                os.makedirs(self.combined_folder + "/raw_dataset/labels")
             else:
                 raise IOError(f"{self.combined_folder} already exists. Input new name for folder.")
             # check for existence of json file
             if not os.path.exists(self.json_file):
                 with open(self.json_file, "w") as f:
-                    json_data = {
-                        "candidate_labels": []
-                    }
+                    json_data = {"candidate_labels": []}
                     json.dump(json_data, f, indent=4)
 
             # get previous data
@@ -161,12 +187,12 @@ class AutoTrain:
             # give generic name of object to detect
             object_name = input("What object you want to detect: \n") + "."
             # update the json file with new class
-            with open(self.json_file, 'r') as file:
+            with open(self.json_file, "r") as file:
                 data = json.load(file)
-            data['candidate_labels'].append(object_name)
-            with open(self.json_file, 'w') as file:
+            data["candidate_labels"].append(object_name)
+            with open(self.json_file, "w") as file:
                 json.dump(data, file, indent=4)
-            
+
             # Create new data for object specified; and train it and get the MaP50 score
             object_specific = input("What name do you want to give to your trained object: \n")
             new_weights_path = self.new_data(object_name=object_name, object_specific=object_specific)
@@ -185,5 +211,13 @@ class AutoTrain:
 
 
 if __name__ == "__main__":
-    at = AutoTrain("/home/owl/workspace/auto-train/data/testing", prev_data_folder="/home/owl/workspace/auto-train/data/new_weights_v20250106193615/raw_dataset", new_weights=True, inference=False, image_threshold=10, epochs=2, abs_yaml_file="/home/owl/workspace/auto-train/data/new_weights_v20250106193615/train.yaml")
+    at = AutoTrain(
+        "/home/owl/workspace/auto-train/data/testing",
+        prev_data_folder="/home/owl/workspace/auto-train/data/new_weights_v20250106193615/raw_dataset",
+        new_weights=True,
+        inference=False,
+        image_threshold=10,
+        epochs=2,
+        abs_yaml_file="/home/owl/workspace/auto-train/data/new_weights_v20250106193615/train.yaml",
+    )
     new_weights_path = at.run()

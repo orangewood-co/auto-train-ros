@@ -6,20 +6,18 @@ import shutil
 import traceback
 
 import rclpy
+from auto_train_ros.action import AutoTrain as AutoTrainAction
 from rclpy.action import ActionServer
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 
-from auto_train_ros.action import AutoTrain as AutoTrainAction
 from source.auto_train import AutoTrain
 
 
 class AutoTrainActionServer(Node):
     def __init__(self):
         super().__init__("auto_train_action_server")
-        self._action_server = ActionServer(
-            self, AutoTrainAction, "auto_train", self.execute_callback
-        )
+        self._action_server = ActionServer(self, AutoTrainAction, "auto_train", self.execute_callback)
         self.get_logger().info("AutoTrain Action Server is ready.")
 
     def _publish_feedback(self, goal_handle, message):
@@ -93,9 +91,7 @@ class AutoTrainActionServer(Node):
             )
 
             # 5. Collect new data, augment, and train
-            new_weights_path = at.new_data(
-                object_name=object_name, object_specific=req.object_label
-            )
+            new_weights_path = at.new_data(object_name=object_name, object_specific=req.object_label)
 
             result = AutoTrainAction.Result()
             result.new_weights_path = new_weights_path or ""
@@ -105,9 +101,7 @@ class AutoTrainActionServer(Node):
                 self._publish_feedback(goal_handle, "Training complete")
                 goal_handle.succeed()
             else:
-                self._publish_feedback(
-                    goal_handle, "Failed — no images captured or mAP below threshold"
-                )
+                self._publish_feedback(goal_handle, "Failed — no images captured or mAP below threshold")
                 goal_handle.abort()
             self.get_logger().info(f"Result: weights={result.new_weights_path}")
             return result
@@ -115,9 +109,7 @@ class AutoTrainActionServer(Node):
         except Exception as e:
             self.get_logger().error(f"AutoTrain failed: {e}\n{traceback.format_exc()}")
             # Clean up partial data on failure
-            if os.path.exists(at.combined_folder) and os.listdir(
-                f"{at.combined_folder}/raw_dataset"
-            ):
+            if os.path.exists(at.combined_folder) and os.listdir(f"{at.combined_folder}/raw_dataset"):
                 shutil.rmtree(at.combined_folder)
             goal_handle.abort()
             return AutoTrainAction.Result(new_weights_path="", success=False)

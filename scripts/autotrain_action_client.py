@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 
 import json
+
 import rclpy
+from auto_train_ros.action import AutoTrain as AutoTrainAction
 from rclpy.action import ActionClient
 from rclpy.node import Node
-
-from auto_train_ros.action import AutoTrain as AutoTrainAction
 
 
 class AutoTrainActionClient(Node):
@@ -51,9 +51,7 @@ class AutoTrainActionClient(Node):
         goal.object_label = object_label
         goal.image_topic_name = image_topic_name
 
-        self._send_goal_future = self._action_client.send_goal_async(
-            goal, feedback_callback=self._feedback_callback
-        )
+        self._send_goal_future = self._action_client.send_goal_async(goal, feedback_callback=self._feedback_callback)
         self._send_goal_future.add_done_callback(self._goal_response_callback)
 
     def _goal_response_callback(self, future):
